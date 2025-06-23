@@ -11,7 +11,29 @@
       position: absolute;
       top: 0; left: 0;
       width: 100%; height: 100%;
-      background-color: THREE from 'https://cdn.jsdelivr.net/npm/three@0.136.0/build/three.module.js';
+      background-color: rgba(0,0,0,0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+    #instructions {
+      font-size: 24px;
+      color: white;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+<div id="blocker">
+  <div id="instructions">
+    <span style="font-size:40px">Click to play</span><br/>
+    (W, A, S, D = Move, SPACE = Jump, MOUSE = Look around)
+  </div>
+</div>
+
+<script type="module">
+  import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.136.0/build/three.module.js';
   import { PointerLockControls } from 'https://cdn.jsdelivr.net/npm/three@0.136.0/examples/jsm/controls/PointerLockControls.js';
 
   let camera, scene, renderer, controls;
@@ -50,7 +72,7 @@
     const wallMaterial = new THREE.MeshStandardMaterial({ color: 0x888888 });
     const wallGeometry = new THREE.PlaneGeometry(200, 50);
     const wall1 = new THREE.Mesh(wallGeometry, wallMaterial);
-    wall1.position.set(, 25, -100);
+    wall1.position.set(0, 25, -100);
     scene.add(wall1);
 
     const boxGeometry = new THREE.BoxGeometry(10, 10, 10);
@@ -87,7 +109,7 @@
       case 'KeyA': moveLeft = true; break;
       case 'ArrowDown':
       case 'KeyS': moveBackward = true; break;
-      case ' 'KeyD': moveRight = true; break;
+      'KeyD': moveRight = true; break;
       case 'Space':
         if (canJump) velocity.y += 350;
         canJump = false;
@@ -149,4 +171,12 @@
     if (controls.getObject().position.y < 10) {
       velocity.y = 0;
       controls.getObject().position.y = 10;
-      canJump = true
+      canJump = true;
+    }
+
+    prevTime = time;
+    renderer.render(scene, camera);
+  }
+</script>
+</body>
+</html>
