@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Workshop Factory</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #000;
+            font-family: Arial, sans-serif;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 100;
+        }
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 20px;
+            height: 20px;
+            margin: -10px 0 0 -10px;
+            border: 2px solid white;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        Use WASD to move<br>
+        Mouse to look around<br>
+        Click to lock cursor
+    </div>
+    <div id="crosshair"></div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        let scene, camera, renderer, controls;
+        let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+        let velocity = new THREE.Vector3();
+        let direction = new THREE.Vector3();
+        let raycaster = new THREE.Raycaster();
+        let objects = [];
+        
+        const PLAYER_HEIGHT = 1.8;
+        const MOVE_SPEED = 50.0;
+        
+        init();
+        animate();
+        
+        function init() {
+            // Scene
+            scene = new THREE.Scene();
+            scene.fog = new THREE.Fog(0x404040, 10, 100);
+            
+            // Camera
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, PLAYER_HEIGHT, 5);
+            
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setClearColor(0x404040);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.body.appendChild(renderer.domElement);
+            
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.3);
+            scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(10, 20, 10);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 2048;
+            directionalLight.shadow.mapSize.height = 2048;
+            directionalLight.shadow.camera.near = 0.5;
+            directionalLight.shadow.camera.far = 50;
+            directionalLight.shadow.camera.left = -25;
+            directionalLight.shadow.camera.right = 25;
+            directionalLight.shadow.camera.top = 25;
+            directionalLight.shadow.camera.bottom = -25;
+            scene.add(directionalLight);
+            
+            // Point lights for workshop atmosphere
+            const pointLight1 = new THREE.PointLight(0xffaa00, 0.8, 15);
+            pointLight1.position.set(-8, 5, -8);
+            scene.add(pointLight1);
+            
+            const pointLight2 = new THREE.PointLight(0x00aaff, 0.6, 12);
+            pointLight2.position.set(8, 4, 8);
+            scene.add(pointLight2);
+            
+            createWorkshop();
+            setupControls();
+            
+            window.addEventListener('resize', onWindowResize);
+        }
+        
+        function createWorkshop() {
+            // Floor
+            const floorGeometry = new THREE.PlaneGeometry(40, 40);
+            const floorMaterial = new THREE.MeshLambertMaterial({ 
+                color: 0x444444,
+                transparent: true,
+                opacity: 0.8
+            });
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = -Math.PI / 2;
+            floor.receiveShadow = true;
+            scene.add(floor);
+            objects.push(floor);
+            
+            // Walls
+            createWalls();
+            
+            // Workshop equipment
+            createWorkbenches();
+            createMachinery();
+            createShelving();
+            createBarrels();
+            createPipes();
+        }
+        
+        function createWalls() {
+            const wallMaterial = new THREE.MeshLambertMaterial({ color: 0x666666 });
+            
+            // Back wall
+            const backWall = new THREE.Mesh(new THREE.PlaneGeometry(40, 10), wallMaterial);
+            backWall.position.set(0, 5, -20);
+            backWall.receiveShadow = true;
+            scene.add(backWall);
+            objects.push(backWall);
+            
+            // Left wall
+            const leftWall = new THREE.Mesh(new THREE.PlaneGeometry(40, 10), wallMaterial);
+            leftWall.position.set(-20, 5, 0);
+            leftWall.rotation.y = Math.PI / 2;
+            leftWall.receiveShadow = true;
+            scene.add(leftWall);
+            objects.push(leftWall);
+            
+            // Right wall
+            const rightWall = new THREE.Mesh(new THREE.PlaneGeometry(40, 10), wallMaterial);
+            rightWall.position.set(20, 5, 0);
+            rightWall.rotation.y = -Math.PI / 2;
+            rightWall.receiveShadow = true;
+            scene.add(rightWall);
+            objects.push(rightWall);
+            
+            // Ceiling
+            const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), wallMaterial);
+            ceiling.position.set(0, 10, 0);
+            ceiling.rotation.x = Math.PI / 2;
+            scene.add(ceiling);
+        }
+        
+        function createWorkbenches() {
+            const benchMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
+            
+            for (let i = 0; i < 4; i++) {
+                const benchTop = new THREE.Mesh(new THREE.BoxGeometry(4, 0.2, 1.5), benchMaterial);
+                benchTop.position.set(-15 + i * 8, 1, -15);
+                benchTop.castShadow = true;
+                benchTop.receiveShadow = true;
+                scene.add(benchTop);
+                objects.push(benchTop);
+                
+                // Legs
+                for (let j = 0; j < 4; j++) {
+                    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1, 0.1), benchMaterial);
+                    leg.position.set(
+                        benchTop.position.x + (j % 2 === 0 ? -1.8 : 1.8),
+                        0.5,
+                        benchTop.position.z + (j < 2 ? -0.6 : 0.6)
+                    );
+                    leg.castShadow = true;
+                    scene.add(leg);
+                    objects.push(leg);
+                }
+            }
+        }
+        
+        function createMachinery() {
+            const machineMaterial = new THREE.MeshLambertMaterial({ color: 0x2F4F4F });
+            
+            // Large machine
+            const machine1 = new THREE.Mesh(new THREE.BoxGeometry(3, 2.5, 2), machineMaterial);
+            machine1.position.set(10, 1.25, -10);
+            machine1.castShadow = true;
+            machine1.receiveShadow = true;
+            scene.add(machine1);
+            objects.push(machine1);
+            
+            // Control panel
+            const panel = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1, 0.8), new THREE.MeshLambertMaterial({ color: 0x444444 }));
+            panel.position.set(8.5, 1.7, -10);
+            panel.castShadow = true;
+            scene.add(panel);
+            objects.push(panel);
+            
+            // Smaller machines
+            for (let i = 0; i < 3; i++) {
+                const machine = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.8, 1.2), machineMaterial);
+                machine.position.set(-10 + i * 4, 0.9, 12);
+                machine.castShadow = true;
+                machine.receiveShadow = true;
+                scene.add(machine);
+                objects.push(machine);
+            }
+        }
+        
+        function createShelving() {
+            const shelfMaterial = new THREE.MeshLambertMaterial({ color: 0x654321 });
+            
+            for (let i = 0; i < 3; i++) {
+                // Vertical supports
+                const support1 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 4, 0.1), shelfMaterial);
+                support1.position.set(-18, 2, -5 + i * 8);
+                support1.castShadow = true;
+                scene.add(support1);
+                objects.push(support1);
+                
+                const support2 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 4, 0.1), shelfMaterial);
+                support2.position.set(-16, 2, -5 + i * 8);
+                support2.castShadow = true;
+                scene.add(support2);
+                objects.push(support2);
+                
+                // Shelves
+                for (let j = 0; j < 3; j++) {
+                    const shelf = new THREE.Mesh(new THREE.BoxGeometry(2, 0.1, 1), shelfMaterial);
+                    shelf.position.set(-17, 1 + j * 1.2, -5 + i * 8);
+                    shelf.castShadow = true;
+                    shelf.receiveShadow = true;
+                    scene.add(shelf);
+                    objects.push(shelf);
+                }
+            }
+        }
+        
+        function createBarrels() {
+            const barrelMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
+            
+            for (let i = 0; i < 6; i++) {
+                const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 1.5), barrelMaterial);
+                barrel.position.set(
+                    15 + (i % 3) * 1.2,
+                    0.75,
+                    8 + Math.floor(i / 3) * 1.2
+                );
+                barrel.castShadow = true;
+                barrel.receiveShadow = true;
+                scene.add(barrel);
+                objects.push(barrel);
+            }
+        }
+        
+        function createPipes() {
+            const pipeMaterial = new THREE.MeshLambertMaterial({ color: 0x708090 });
+            
+            // Horizontal pipes along the ceiling
+            for (let i = 0; i < 3; i++) {
+                const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 35), pipeMaterial);
+                pipe.position.set(-10 + i * 10, 8.5, 0);
+                pipe.rotation.z = Math.PI / 2;
+                pipe.castShadow = true;
+                scene.add(pipe);
+            }
+            
+            // Vertical pipes
+            for (let i = 0; i < 4; i++) {
+                const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 4), pipeMaterial);
+                pipe.position.set(-15 + i * 10, 2, -18);
+                pipe.castShadow = true;
+                scene.add(pipe);
+                objects.push(pipe);
+            }
+        }
+        
+        function setupControls() {
+            document.addEventListener('keydown', onKeyDown);
+            document.addEventListener('keyup', onKeyUp);
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('click', () => {
+                document.body.requestPointerLock();
+            });
+            
+            document.addEventListener('pointerlockchange', () => {
+                const info = document.getElementById('info');
+                if (document.pointerLockElement === document.body) {
+                    info.style.display = 'none';
+                } else {
+                    info.style.display = 'block';
+                }
+            });
+        }
+        
+        function onKeyDown(event) {
+            switch (event.code) {
+                case 'KeyW': moveForward = true; break;
+                case 'KeyS': moveBackward = true; break;
+                case 'KeyA': moveLeft = true; break;
+                case 'KeyD': moveRight = true; break;
+            }
+        }
+        
+        function onKeyUp(event) {
+            switch (event.code) {
+                case 'KeyW': moveForward = false; break;
+                case 'KeyS': moveBackward = false; break;
+                case 'KeyA': moveLeft = false; break;
+                case 'KeyD': moveRight = false; break;
+            }
+        }
+        
+        function onMouseMove(event) {
+            if (document.pointerLockElement === document.body) {
+                const euler = new THREE.Euler(0, 0, 0, 'YXZ');
+                euler.setFromQuaternion(camera.quaternion);
+                euler.y -= event.movementX * 0.002;
+                euler.x -= event.movementY * 0.002;
+                euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, euler.x));
+                camera.quaternion.setFromEuler(euler);
+            }
+        }
+        
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const delta = 0.016; // 60fps
+            
+            velocity.x -= velocity.x * 10.0 * delta;
+            velocity.z -= velocity.z * 10.0 * delta;
+            
+            direction.z = Number(moveForward) - Number(moveBackward);
+            direction.x = Number(moveRight) - Number(moveLeft);
+            direction.normalize();
+            
+            if (moveForward || moveBackward) velocity.z -= direction.z * MOVE_SPEED * delta;
+            if (moveLeft || moveRight) velocity.x -= direction.x * MOVE_SPEED * delta;
+            
+            const oldPosition = camera.position.clone();
+            
+            camera.translateX(velocity.x * delta);
+            camera.translateZ(velocity.z * delta);
+            
+            // Keep camera at proper height and within bounds
+            camera.position.y = PLAYER_HEIGHT;
+            camera.position.x = Math.max(-18, Math.min(18, camera.position.x));
+            camera.position.z = Math.max(-18, Math.min(18, camera.position.z));
+            
+            // Simple collision detection
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+            const intersections = raycaster.intersectObjects(objects);
+            
+            if (intersections.length > 0 && intersections[0].distance < 1) {
+                camera.position.copy(oldPosition);
+            }
+            
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>
